@@ -16,15 +16,17 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         if (token) {
-            fetchUser();
+            // Safety timeout — never block render for more than 3 seconds
+            const timeout = setTimeout(() => setLoading(false), 3000);
+            fetchUser().finally(() => clearTimeout(timeout));
         } else {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token]);
 
     const fetchUser = async () => {
         try {
-            // We use fetch here instead of api service to avoid circular dependency if ever they arise
             const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/users/me`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -39,6 +41,7 @@ export function AuthProvider({ children }) {
             }
         } catch (e) {
             console.error('Auth refresh failed', e);
+            // Don't logout on network errors — user may just be offline
         } finally {
             setLoading(false);
         }
@@ -58,9 +61,24 @@ export function AuthProvider({ children }) {
         setUser(null);
     };
 
+    // Show a minimal spinner only while auth is initialising
+    // Never block the entire app — max wait 3 seconds
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-950">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold animate-pulse">
+                        Loading PickWise...
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <AuthContext.Provider value={{ token, user, login, logout, loading, isAuthenticated: !!token }}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 }
