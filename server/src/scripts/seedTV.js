@@ -42,7 +42,10 @@ const GENRE_MAP = {
       : '',
     genres: t.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean),
     popularityScore: t.popularity,
-    averageRating: t.vote_average
+    averageRating: t.vote_average,
+    source: 'tmdb',
+    externalId: String(t.id),
+    sources: [{ name: 'tmdb', externalId: String(t.id) }]
   }));
 
   await ContentItem.insertMany(shows, { ordered: false }).catch(() => {});

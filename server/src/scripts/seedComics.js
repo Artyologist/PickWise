@@ -47,7 +47,10 @@ const COMIC_GENRES = [
         [COMIC_GENRES[Math.floor(Math.random() * COMIC_GENRES.length)]],
       popularityScore: Math.random() * 100,
       averageRating: b.volumeInfo.averageRating || null,
-      ratingCount: b.volumeInfo.ratingsCount || 0
+      ratingCount: b.volumeInfo.ratingsCount || 0,
+      source: 'google_books',
+      externalId: String(b.id),
+      sources: [{ name: 'google_books', externalId: String(b.id) }]
     }));
 
   await ContentItem.insertMany(comics, { ordered: false }).catch(() => {});

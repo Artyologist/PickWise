@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const LoginEvent = require('../models/LoginEvent');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
@@ -19,6 +20,15 @@ exports.register = async (req, res) => {
 
     const user = await User.create({ username, email, password });
 
+    // 🛡️ Log Register Event
+    await LoginEvent.create({
+      userId: user._id,
+      email,
+      status: 'success',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
     const token = jwt.sign(
       { id: user._id },
       JWT_SECRET,
@@ -32,7 +42,8 @@ exports.register = async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        profileImage: user.profileImage
+        profileImage: user.profileImage,
+        role: user.role
       }
     });
   } catch (err) {
@@ -46,10 +57,27 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
+    
     if (!user || !(await user.comparePassword(password))) {
+      // 🛡️ Log Failed Attempt
+      await LoginEvent.create({
+        email,
+        status: 'failed',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
       return res.status(401).json({ ok: false, error: 'Invalid credentials' });
     }
+
+    // 🛡️ Log Success Event
+    await LoginEvent.create({
+      userId: user._id,
+      email,
+      status: 'success',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
 
     const token = jwt.sign(
       { id: user._id },
@@ -64,7 +92,8 @@ exports.login = async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        profileImage: user.profileImage
+        profileImage: user.profileImage,
+        role: user.role
       }
     });
   } catch (err) {

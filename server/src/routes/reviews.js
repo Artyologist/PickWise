@@ -60,16 +60,27 @@ router.post('/:contentId', auth, async (req, res) => {
       }
     ]);
 
-    await ContentItem.findByIdAndUpdate(content._id, {
-      averageRating: stats[0].avg,
-      ratingCount: stats[0].count
-    });
+    if (stats.length > 0) {
+      await ContentItem.findByIdAndUpdate(content._id, {
+        averageRating: stats[0].avg.toFixed(1),
+        ratingCount: stats[0].count
+      });
+    }
 
     res.json({ ok: true, review });
 
   } catch (err) {
-    console.error('REVIEW ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Review failed' });
+    console.error('CRITICAL REVIEW ERROR:', {
+      message: err.message,
+      stack: err.stack,
+      body: req.body,
+      user: req.user?._id
+    });
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Review failed', 
+      details: err.message 
+    });
   }
 });
 
@@ -78,14 +89,64 @@ router.post('/:contentId', auth, async (req, res) => {
 ========================= */
 router.get('/:contentId', async (req, res) => {
   try {
-    const reviews = await Review.find({
-      content: req.params.contentId
-    })
-      .populate('user', 'username profileImage')
-      .sort({ createdAt: -1 });
+    const { contentId } = req.params;
 
-    res.json({ ok: true, reviews });
+    const content = await ContentItem.findById(contentId).lean();
+    if (!content) {
+      return res.status(404).json({ ok: false, error: 'Content not found' });
+    }
+
+    // 1. Get Internal Reviews
+    const internalReviews = await Review.find({ content: contentId })
+      .populate('user', 'username profileImage')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const mappedInternal = internalReviews.map(r => ({
+      ...r,
+      source: 'PickWise',
+      isInternal: true
+    }));
+
+    // 2. Mock external fetching logic (similar to content.js)
+    // For a cleaner approach, these services could be moved to a shared utility
+    const { fetchTMDBDetails } = require('../services/tmdb.service');
+    const { fetchJikanDetails } = require('../services/jikan.service');
+    const { fetchRAWGDetails } = require('../services/rawg.service');
+    const { fetchGoogleBookDetails } = require('../services/googleBooks.service');
+
+    let externalDetails = null;
+    try {
+      if (content.source === 'tmdb') {
+        externalDetails = await fetchTMDBDetails(content.externalId, content.category);
+      } else if (content.source === 'mal') {
+        const type = (content.category === 'manga' || content.category === 'novel') ? 'manga' : 'anime';
+        externalDetails = await fetchJikanDetails(content.externalId, type);
+      } else if (content.source === 'rawg') {
+        externalDetails = await fetchRAWGDetails(content.externalId);
+      } else if (content.source === 'google_books') {
+        externalDetails = await fetchGoogleBookDetails(content.externalId);
+      }
+    } catch (e) {
+      console.warn("External review fetch failed:", e.message);
+    }
+
+    const mappedExternal = (externalDetails?.externalReviews || []).map(r => ({
+      _id: `ext_${Math.random().toString(36).substr(2, 9)}`,
+      user: { username: r.author || 'External User' },
+      rating: r.rating || 0,
+      text: r.content,
+      source: r.source || content.source.toUpperCase(),
+      createdAt: new Date(),
+      isInternal: false,
+      url: r.url
+    }));
+
+    const allReviews = [...mappedInternal, ...mappedExternal];
+
+    res.json({ ok: true, reviews: allReviews });
   } catch (err) {
+    console.error("GET REVIEWS ERROR:", err);
     res.status(500).json({ ok: false, error: 'Failed to fetch reviews' });
   }
 });

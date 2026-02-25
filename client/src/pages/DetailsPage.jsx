@@ -21,9 +21,13 @@ export default function DetailsPage() {
       {/* HERO */}
       <div className="flex flex-col md:flex-row gap-6">
         <img
-          src={item.posterUrl}
+          src={item.posterUrl || "/placeholder-poster.png"}
           alt={item.title}
           className="w-full md:w-72 rounded-lg shadow-lg"
+          onError={(e) => {
+            e.target.src = "/placeholder-poster.png";
+            e.target.onerror = null;
+          }}
         />
 
         <div className="flex-1">

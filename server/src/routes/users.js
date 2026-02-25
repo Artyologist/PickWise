@@ -1,133 +1,71 @@
 const express = require('express');
-const auth = require('../middleware/auth.middleware');
+const router = express.Router();
 const User = require('../models/User');
 const Review = require('../models/Review');
-
-const router = express.Router();
+const authMiddleware = require('../middleware/auth.middleware');
 
 /* =========================
    GET MY PROFILE
 ========================= */
-router.get('/me', auth, async (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const reviewCount = await Review.countDocuments({ user: req.user._id });
-
-    res.json({
-      ok: true,
-      user: {
-        id: req.user._id,
-        email: req.user.email,
-        username: req.user.username,
-        profileImage: req.user.profileImage || '',
-        reviewCount
-      }
-    });
+    const user = await User.findById(req.user.id).lean();
+    res.json({ ok: true, user });
   } catch (err) {
-    console.error('ME ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Failed to load profile' });
+    res.status(500).json({ ok: false, error: 'Failed to fetch profile' });
+  }
+});
+
+/* =========================
+   UPDATE MY PROFILE
+========================= */
+router.put('/me', authMiddleware, async (req, res) => {
+  try {
+    const { username, bio, profileImage } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { username, bio, profileImage } },
+      { new: true }
+    ).lean();
+    res.json({ ok: true, user });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Failed to update profile' });
   }
 });
 
 /* =========================
    GET MY REVIEWS
 ========================= */
-router.get('/me/reviews', auth, async (req, res) => {
+router.get('/me/reviews', authMiddleware, async (req, res) => {
   try {
-    const reviews = await Review.find({ user: req.user._id })
-      .populate('content', 'title category posterUrl')
-      .sort({ createdAt: -1 });
-
-    res.json({
-      ok: true,
-      results: reviews
-    });
+    const reviews = await Review.find({ user: req.user.id })
+      .populate('content', 'title posterUrl category year')
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ ok: true, results: reviews });
   } catch (err) {
-    console.error('MY REVIEWS ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Failed to load reviews' });
+    res.status(500).json({ ok: false, error: 'Failed to fetch reviews' });
   }
 });
 
 /* =========================
    GET MY STATS
 ========================= */
-router.get('/me/stats', auth, async (req, res) => {
+router.get('/me/stats', authMiddleware, async (req, res) => {
   try {
-    const stats = await Review.aggregate([
-      { $match: { user: req.user._id } },
-      {
-        $group: {
-          _id: '$content',
-          avgRating: { $avg: '$rating' }
-        }
-      }
-    ]);
-
-    const totalReviews = await Review.countDocuments({ user: req.user._id });
-
-    const byCategory = await Review.aggregate([
-      { $match: { user: req.user._id } },
-      {
-        $lookup: {
-          from: 'contentitems',
-          localField: 'content',
-          foreignField: '_id',
-          as: 'content'
-        }
-      },
-      { $unwind: '$content' },
-      {
-        $group: {
-          _id: '$content.category',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    const reviews = await Review.find({ user: req.user.id });
+    const avgRating = reviews.length > 0 
+      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+      : 0;
 
     res.json({
       ok: true,
-      totalReviews,
-      byCategory,
-      averageRating:
-        stats.length > 0
-          ? (
-              stats.reduce((a, b) => a + b.avgRating, 0) /
-              stats.length
-            ).toFixed(1)
-          : null
+      totalReviews: reviews.length,
+      averageRating: avgRating,
+      watchlistCount: 0 // TODO: implement
     });
   } catch (err) {
-    console.error('STATS ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Failed to load stats' });
-  }
-});
-
-
-/* =========================
-   PUBLIC USER PROFILE
-========================= */
-router.get('/:id/public', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id)
-      .select('username profileImage');
-
-    if (!user) {
-      return res.status(404).json({ ok: false, error: 'User not found' });
-    }
-
-    const reviewCount = await Review.countDocuments({ user: user._id });
-
-    res.json({
-      ok: true,
-      user: {
-        id: user._id,
-        username: user.username,
-        profileImage: user.profileImage || '',
-        reviewCount
-      }
-    });
-  } catch (err) {
-    console.error('PUBLIC PROFILE ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Failed to load user' });
+    res.status(500).json({ ok: false, error: 'Failed to fetch stats' });
   }
 });
 

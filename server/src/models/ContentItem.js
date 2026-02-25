@@ -19,13 +19,6 @@ const ContentItemSchema = new mongoose.Schema({
     index: true
   }, // movie, tv, anime, manga, comic, novel, videogame, documentary
  
-  externalId: {
-  type: String,
-  index: true,
-  unique: true,
-  sparse: true
-},
-
   // 🔹 API deduplication (VERY IMPORTANT)
   source: {
     type: String,
@@ -40,14 +33,29 @@ const ContentItemSchema = new mongoose.Schema({
     default: 1
   },
 
-  // 🔹 Cross-IP linking (Last of Us → game + tv + novel)
-  ipKey: {
+  // 🔹 Cross-IP linking
+  universe: {
     type: String,
     index: true
   },
+  crossIp: [{
+    relationType: {
+      type: String,
+      enum: [
+        'prequel', 'sequel', 'spinoff', 'spin_off', 'same_universe', 
+        'adaptation', 'based_on', 'inspired_by', 
+        'documentary', 'video_game', 'game', 'novel', 'companion_work',
+        'anime', 'manga', 'tv', 'comic', 'other_media'
+      ]
+    },
+    targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'ContentItem' },
+    label: String
+  }],
+  timelineOrder: Number,
 
   // 🔹 Metadata
   genres: [String],
+  description: String,
   shortDescription: String,
   fullDescription: String,
   releaseDate: Date,
@@ -75,32 +83,23 @@ const ContentItemSchema = new mongoose.Schema({
   ],
   
   averageRating: {
-  type: Number,
-  default: 0
- },
+    type: Number,
+    default: 0
+  },
   ratingCount: {
-  type: Number,
-  default: 0
- },
-  universe: {
-  type: String, // 'harry-potter', 'star-wars', 'resident-evil'
-  index: true
-},
-timelineOrder: Number,
+    type: Number,
+    default: 0
+  },
 
   // 🔹 Ranking & timeline
   popularityScore: Number,
   milestones: [{ type: Object }],
-
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+}, { 
+  timestamps: true 
 });
 
 /**
  * 🚫 Prevent duplicate API items
- * Example: same TMDB movie fetched twice
  */
 ContentItemSchema.index(
   { source: 1, externalId: 1 },
@@ -114,6 +113,5 @@ ContentItemSchema.index(
   { 'sources.name': 1, 'sources.externalId': 1 },
   { unique: true, sparse: true }
 );
-
 
 module.exports = mongoose.model('ContentItem', ContentItemSchema);

@@ -12,42 +12,56 @@ const UserSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  passwordHash: {
+  password: {
     type: String,
-    required: true
+    required: true,
+    select: false // 🔒 Never return password in queries
   },
   profileImage: {
     type: String,
     default: null
   },
+  bio: {
+    type: String,
+    default: ''
+  },
   reviewed: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ContentItem'
   }],
+  watchlist: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContentItem'
+  }],
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContentItem'
+  }],
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
   createdAt: {
     type: Date,
     default: Date.now
   },
   reviewCount: {
-  type: Number,
-  default: 0
-  },
-  profileImage: {
-  type: String,
-  default: ''
- }
+    type: Number,
+    default: 0
+  }
 });
 
 /* 🔐 HASH PASSWORD */
 UserSchema.pre('save', async function (next) {
-  if (!this.isModified('passwordHash')) return next();
-  this.passwordHash = await bcrypt.hash(this.passwordHash, 10);
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
 /* 🔑 COMPARE PASSWORD */
 UserSchema.methods.comparePassword = function (password) {
-  return bcrypt.compare(password, this.passwordHash);
+  return bcrypt.compare(password, this.password);
 };
 
 module.exports = mongoose.model('User', UserSchema);

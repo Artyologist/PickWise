@@ -45,7 +45,10 @@ const GENRE_MAP = {
       : '',
     genres: m.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean),
     popularityScore: m.popularity,
-    averageRating: m.vote_average
+    averageRating: m.vote_average,
+    source: 'tmdb',
+    externalId: String(m.id),
+    sources: [{ name: 'tmdb', externalId: String(m.id) }]
   }));
 
   await ContentItem.insertMany(movies, { ordered: false }).catch(() => {});

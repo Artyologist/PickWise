@@ -25,12 +25,10 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'User already exists' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
     const user = await User.create({
       email,
       username,
-      passwordHash
+      password
     });
 
     const token = jwt.sign(
@@ -45,12 +43,14 @@ router.post('/register', async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        username: user.username
+        username: user.username,
+        role: user.role,
+        profileImage: user.profileImage
       }
     });
   } catch (err) {
     console.error('REGISTER ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Registration failed' });
+    res.status(500).json({ ok: false, error: 'Registration failed', details: err.message, stack: err.stack });
   }
 });
 
@@ -65,12 +65,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Missing credentials' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(400).json({ ok: false, error: 'Invalid credentials' });
     }
 
-    const match = await bcrypt.compare(password, user.passwordHash);
+    const match = await user.comparePassword(password);
     if (!match) {
       return res.status(400).json({ ok: false, error: 'Invalid credentials' });
     }
@@ -87,12 +87,18 @@ router.post('/login', async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        username: user.username
+        username: user.username,
+        role: user.role,
+        profileImage: user.profileImage
       }
     });
   } catch (err) {
-    console.error('LOGIN ERROR:', err);
-    res.status(500).json({ ok: false, error: 'Login failed' });
+    console.error('CRITICAL LOGIN ERROR:', {
+      message: err.message,
+      stack: err.stack,
+      body: req.body
+    });
+    res.status(500).json({ ok: false, error: 'Login failed', details: err.message });
   }
 });
 

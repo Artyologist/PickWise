@@ -9,7 +9,14 @@ export default function SimilarRow({ items }) {
       <div className="row">
         {items.map(i => (
           <Link key={i._id} to={`/content/${i._id}`}>
-            <img src={i.posterUrl} alt={i.title} />
+            <img
+              src={i.posterUrl || "/placeholder-poster.png"}
+              alt={i.title}
+              onError={(e) => {
+                e.target.src = "/placeholder-poster.png";
+                e.target.onerror = null;
+              }}
+            />
             <p>{i.title}</p>
           </Link>
         ))}
